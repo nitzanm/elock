@@ -11,18 +11,18 @@ lock(Socket, Parent) ->
         go_ahead ->
             inet:setopts(Socket, [{active, true}])
     end,
-    error_logger:info_msg("Got a connection~n", []),
+    error_logger:info_msg("~p Got a connection~n", [self()]),
     loop(Socket, "").
 
 % remove the handler and exit
 lock_exit(_Reason) ->
-    error_logger:info_msg("lock_exit~n", []),
+    error_logger:info_msg("~p lock_exit~n", [self()]),
     exit(closed).
 
 lock_response(Socket, Key, R) ->
     case R of
         ok ->
-            error_logger:info_msg("Locked ~p~n", [Key]),
+            error_logger:info_msg("~p Locked ~p~n", [self(), Key]),
             send_response(Socket, 200, "Acquired");
         _ ->
             send_response(Socket, 409, "Unavailable")
@@ -46,7 +46,7 @@ process_command(Socket, "lock", [Key, WaitStr]) ->
 process_command(Socket, "unlock", [Key]) ->
     case lock_serv:unlock(Key) of
         ok ->
-            error_logger:info_msg("Unlocked ~p~n", [Key]),
+            error_logger:info_msg("~p Unlocked ~p~n", [self(), Key]),
             send_response(Socket, 200, "Unlocked");
         X  ->
             send_response(Socket, 403, io_lib:format("~p", [X]))
@@ -93,7 +93,7 @@ process_incoming(_Socket, Data, false) ->
 process_incoming(Socket, Data, true) ->
 	{Line, Extra} = extract_line(Data),
     [Cmd|Args] = string:tokens(string:strip(Line), " "),
-    error_logger:info_msg("Got command:  ~p(~p)~n", [Cmd, Args]),
+    error_logger:info_msg("~p Got command:  ~p(~p)~n", [self(), Cmd, Args]),
     process_command(Socket, Cmd, Args),
     {more, Extra}.
 
@@ -116,10 +116,10 @@ loop(Socket, IncomingData) ->
             loop(Socket, CurrentData ++ Bytes);
         % Control messages
         {tcp_closed, Socket} ->
-            error_logger:info_msg("lock_serv:  socket closed~n", []),
+            error_logger:info_msg("~p lock_serv:  socket closed~n", [self()]),
             lock_exit(closed);
         {tcp_error, Socket, Reason} ->
-            error_logger:error_msg("lock_serv:  socket error:  ~p~n", [Reason]),
+            error_logger:error_msg("~p lock_serv:  socket error:  ~p~n", [self(), Reason]),
             gen_tcp:close(Socket),
             lock_exit(Reason);
         % Deaths
@@ -127,15 +127,15 @@ loop(Socket, IncomingData) ->
             lock_exit("Close Requested"),
             loop(Socket, IncomingData);
         {'EXIT', _U, Why} ->
-            error_logger:info_msg("lock_serv: exiting:  ~p~n", [Why]),
+            error_logger:info_msg("~p lock_serv: exiting:  ~p~n", [self(), Why]),
             gen_tcp:close(Socket),
             lock_exit(Why);
         {'DOWN', _Ref, process, _Parent, Why} ->
-            error_logger:error_msg("Parent died (~p), shutting down", [Why]),
+            error_logger:error_msg("~p Parent died (~p), shutting down", [self(), Why]),
             gen_tcp:close(Socket),
             lock_exit(Why);
         % Unknown
         Unknown ->
-            error_logger:error_msg("lock_serv: Unhandled message:  ~p~n", [Unknown]),
+            error_logger:error_msg("~p lock_serv: Unhandled message:  ~p~n", [self(), Unknown]),
             loop(Socket, CurrentData)
     end.
